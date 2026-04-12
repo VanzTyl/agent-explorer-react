@@ -61,14 +61,19 @@ export default function ContextMenu({ isOpen, x, y, targetType, targetName, onAc
           </>
         )}
 
-        {/* Folder Specific Actions (Under the hood, these are still the category groupings) */}
-        {(targetType === 'category' || targetType === 'sub_category') && (
+        {/* Folder Specific Actions */}
+        {(targetType === 'category' || targetType === 'sub_category' || targetType === 'folder') && (
           <>
             <button onClick={(e) => handleAction(e, 'create_agent')} className="context_action_btn flex items-center w-full px-3 py-1.5 hover:bg-primary hover:text-white dark:hover:bg-primary dark:hover:text-white transition-colors text-left focus:outline-none">
               New Agent...
             </button>
             <button onClick={(e) => handleAction(e, 'create_folder')} className="context_action_btn flex items-center w-full px-3 py-1.5 hover:bg-primary hover:text-white dark:hover:bg-primary dark:hover:text-white transition-colors text-left focus:outline-none">
               Create Folder...
+            </button>
+            <div className="context_divider h-px bg-gray-200 dark:bg-gray-700 my-1"></div>
+            {/* NEW: Rename Folder Button */}
+            <button onClick={(e) => handleAction(e, 'rename_folder')} className="context_action_btn flex items-center w-full px-3 py-1.5 hover:bg-primary hover:text-white dark:hover:bg-primary dark:hover:text-white transition-colors text-left focus:outline-none">
+              Rename Folder...
             </button>
             <div className="context_divider h-px bg-gray-200 dark:bg-gray-700 my-1"></div>
             <button onClick={(e) => handleAction(e, 'delete_folder')} className="context_action_btn flex items-center w-full px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white dark:hover:bg-red-600 dark:hover:text-white transition-colors text-left focus:outline-none">

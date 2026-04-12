@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 
 // Added 'workspace' as a global target type
-export type ContextTargetType = 'agent' | 'category' | 'sub_category' | 'workspace' | null;
+export type ContextTargetType = 'workspace' | 'agent' | 'folder' | 'category' | 'sub_category' | null;
 
 interface ContextMenuState {
   isOpen: boolean;

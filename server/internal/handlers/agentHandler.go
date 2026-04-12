@@ -28,11 +28,11 @@ func CreateAgent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to process sub-prompts", http.StatusInternalServerError)
 		return
 	}
-
+	// Added folder id
 	query := `
-		INSERT INTO agents (name, sub_prompts, category, sub_category)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, name, sub_prompts, category, sub_category, created_at, updated_at
+		INSERT INTO agents (name, sub_prompts, category, sub_category, folder_id)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, created_at, updated_at
 	`
 
 	// context acts as an async function, meaning to say the server won't stop just because the function is being executed. this takes the var agent that we initialized and uses this data, 
@@ -44,6 +44,7 @@ func CreateAgent(w http.ResponseWriter, r *http.Request) {
 		subPromptsJSON,
 		agent.Category,
 		agent.SubCategory,
+		agent.FolderID, // Finds for folder id now
 	).Scan(
 		&agent.ID,
 		&agent.CreatedAt,
@@ -64,8 +65,9 @@ func CreateAgent(w http.ResponseWriter, r *http.Request) {
 func GetAgents(w http.ResponseWriter, r *http.Request){
 	w.Header().Set("Content-Type", "application/json")
 
+	// Added folder id
 	query :=  `
-		SELECT id, name, sub_prompts, category, sub_category, created_at, updated_at
+		SELECT id, name, sub_prompts, category, sub_category, folder_id, created_at, updated_at
 		FROM agents
 		ORDER by created_at DESC
 	`
@@ -91,6 +93,7 @@ func GetAgents(w http.ResponseWriter, r *http.Request){
 			&subPromptBytes,
 			&agent.Category,
 			&agent.SubCategory,
+			&agent.FolderID, // Returns folder id now
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
 		)
@@ -133,11 +136,11 @@ func UpdateAgent(w http.ResponseWriter, r *http.Request){
 
 	query := `
 		UPDATE agents
-		SET name = $1, sub_prompts = $2, category = $3, sub-category = $4
+		SET name = $1, sub_prompts = $2, category = $3, sub_category = $4
 		WHERE id = $5
 	`
 
-	result, err := database.DB.Exec(context.Background(), query, agent.Name, subPromptsJSON, agent.Category, id)
+	result, err := database.DB.Exec(context.Background(), query, agent.Name, subPromptsJSON, agent.Category, agent.SubCategory, id)
 
 	if err != nil{
 		log.Printf("Database Update Error: %v\n", err)
@@ -172,4 +175,41 @@ func DeleteAgent(w http.ResponseWriter, r *http.Request){
 	}
 
 	w.WriteHeader(http.StatusNoContent) // 204 for deletes, this is the standard when successfully deleting
+}
+
+func MoveAgent(w http.ResponseWriter, r *http.Request){
+	w.Header().Set("Content-Type", "application/json")
+
+	id := r.PathValue("id")
+
+	var payload struct {
+		FolderID *string `json:"folder_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil{
+		http.Error(w, "Invalid payload request", http.StatusBadRequest)
+		return
+	}
+
+	query := `
+		UPDATE agents
+		SET folder_id = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+
+	result, err := database.DB.Exec(context.Background(), query, payload.FolderID, id)
+
+	if err != nil{
+		log.Printf("Database move error: %v\n", err)
+		http.Error(w, "Failed to move agent", http.StatusInternalServerError)
+		return
+	}
+	
+	if result.RowsAffected() == 0{
+		http.Error(w, "Agent not found", http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Agent moved successfully"})
 }

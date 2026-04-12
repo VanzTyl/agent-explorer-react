@@ -13,6 +13,7 @@ type Agent struct {
 	Subprompts []SubPrompt `json:"sub_prompts"`
 	Category string `json:"category"`
 	SubCategory string `json:"sub_category"`
+	FolderID string `json:"folder_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

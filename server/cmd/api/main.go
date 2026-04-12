@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"agent-explorer/internal/middleware"
 	"agent-explorer/internal/database"
 	"agent-explorer/internal/router"
 	"github.com/joho/godotenv"
@@ -30,7 +31,7 @@ func main(){
 
 	log.Println("Server starting on http://localhost:" + port)
 
-	err = http.ListenAndServe(":"+port, mux)
+	err = http.ListenAndServe(":"+port, middleware.CORS(mux))
 
 	if err != nil {
 		log.Fatal("Server failed to start: ",  err)
