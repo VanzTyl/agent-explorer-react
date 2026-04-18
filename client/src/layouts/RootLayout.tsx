@@ -9,6 +9,7 @@ import AgentFormModal from '../components/AgentFormModal.tsx';
 import { type Agent, type Folder } from '../types/agent.ts';
 import { useAgents } from '../hooks/useAgents.ts';
 import { useFolders } from '../hooks/useFolders.ts';
+import ConfirmationModal from '../components/ConfirmationModal.tsx';
 
 function RootLayoutInner() {
   const { openContextMenu, contextMenu, closeContextMenu } = useContextMenu();
@@ -27,6 +28,35 @@ function RootLayoutInner() {
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
 
+  // NEW: State for the unified confirmation and error modals
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string | React.ReactNode;
+    confirmLabel?: string;
+    type: 'danger' | 'info' | 'error';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+    onConfirm: () => {}
+  });
+
+  const closeConfirmModal = () => setConfirmModal(prev => ({ ...prev, isOpen: false }));
+
+  const showErrorModal = (message: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Operation Failed',
+      message,
+      type: 'error',
+      confirmLabel: 'Understood',
+      onConfirm: closeConfirmModal
+    });
+  };
+
   // Deep filter agents based on search query
   const filteredAgents = useMemo(() => {
     if (!searchQuery.trim()) return agents;
@@ -34,8 +64,8 @@ function RootLayoutInner() {
     
     return agents.filter(agent => 
       agent.name.toLowerCase().includes(query) ||
-      agent.category.toLowerCase().includes(query) ||
-      agent.sub_category.toLowerCase().includes(query) ||
+      agent.categories?.some(c => c.toLowerCase().includes(query)) ||
+      agent.sub_categories?.some(s => s.toLowerCase().includes(query)) ||
       agent.sub_prompts?.some(prompt => 
         prompt.sub_prompt_name.toLowerCase().includes(query) ||
         prompt.sub_prompt_content.toLowerCase().includes(query)
@@ -80,25 +110,44 @@ function RootLayoutInner() {
     }
 
     if (action === 'delete_folder' && contextMenu.targetId) {
-      if (window.confirm(`Are you sure you want to delete the folder: ${contextMenu.targetName}? This will delete everything inside it.`)) {
-        deleteFolder(contextMenu.targetId).then(() => {
-          refetchFolders();
-          refetchAgents();
-        });
-      }
+      setConfirmModal({
+        isOpen: true,
+        title: 'Delete Folder?',
+        message: `Are you sure you want to delete "${contextMenu.targetName}"? This will permanently remove all agents and sub-folders inside it.`,
+        confirmLabel: 'Delete Everything',
+        type: 'danger',
+        onConfirm: () => {
+          deleteFolder(contextMenu.targetId!).then(() => {
+            refetchFolders();
+            refetchAgents();
+            closeConfirmModal();
+          });
+        }
+      });
     }
 
     if (action === 'delete_agent' && contextMenu.targetId) {
-      if (window.confirm(`Are you sure you want to delete the agent: ${contextMenu.targetName}?`)) {
-        deleteAgent(contextMenu.targetId).then(() => refetchAgents());
-      }
+      setConfirmModal({
+        isOpen: true,
+        title: 'Delete Agent?',
+        message: `Are you sure you want to delete the agent "${contextMenu.targetName}"?`,
+        confirmLabel: 'Delete Agent',
+        type: 'danger',
+        onConfirm: () => {
+          deleteAgent(contextMenu.targetId!).then(() => {
+            refetchAgents();
+            closeConfirmModal();
+          });
+        }
+      });
     }
   };
 
   const handleSaveFolder = async (data: Partial<Folder>) => {
     try {
       if (folderModalData && data.name) {
-        await updateFolder(folderModalData.id, data.name);
+        // FIX: Passed the whole data object instead of just data.name to match the new hook signature and contract
+        await updateFolder(folderModalData.id, data);
       } else {
         await createFolder(data);
       }
@@ -117,22 +166,29 @@ function RootLayoutInner() {
     setIsAgentModalOpen(false);
   };
 
-  const handleMoveItem = async (itemType: 'AGENT' | 'FOLDER', itemId: string, targetFolderId: string | null) => {
+    const handleMoveItem = async (itemType: 'AGENT' | 'FOLDER', itemId: string, targetFolderId: string | null) => {
     if (itemType === 'AGENT') {
       try {
+        console.log(`📡 [RootLayout] Orchestrating Agent Move: ${itemId} -> ${targetFolderId}`);
         await moveAgent(itemId, targetFolderId);
+        // We refetch to ensure the UI perfectly reflects the backend state
+        await refetchAgents();
       } catch (error) {
         console.error("Failed to move agent.", error);
+        showErrorModal("Failed to move agent. Please check your connection or database status.");
       }
     } else if (itemType === 'FOLDER') {
       try {
         if (itemId === targetFolderId) return; // Prevent putting a folder inside itself
-        await moveFolder(itemId, targetFolderId); // Trigger our new hook!
+        await moveFolder(itemId, targetFolderId);
+        await refetchFolders();
       } catch (error) {
         console.error("Failed to move folder.", error);
+        showErrorModal("Failed to move folder. It may have a name conflict or circular dependency.");
       }
     }
   };
+
 
   const isGlobalLoading = agentsLoading || foldersLoading;
 
@@ -213,6 +269,16 @@ function RootLayoutInner() {
         onSave={handleSaveAgent}
         activeFolderId={activeFolderId}
         agents={agents}
+      />
+
+      <ConfirmationModal 
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirmModal}
       />
 
     </div>

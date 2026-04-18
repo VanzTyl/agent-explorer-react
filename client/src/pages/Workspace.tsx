@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { type Agent, type Folder } from '../types/agent';
 import { useContextMenu } from '../contexts/ContextMenuContext';
@@ -21,6 +21,25 @@ export default function Workspace() {
 
   const currentFolderId = path.length > 0 ? path[path.length - 1].id : null;
   const currentFolderName = path.length > 0 ? path[path.length - 1].name : 'Workspace';
+
+  // NEW: Sync Breadcrumb names if folders are renamed globally
+  useEffect(() => {
+    if (path.length > 0 && folders.length > 0) {
+      const newPath = path.map(segment => {
+        const found = folders.find(f => f.id === segment.id);
+        return found ? { id: found.id, name: found.name } : segment;
+      });
+      
+      if (JSON.stringify(newPath) !== JSON.stringify(path)) {
+        setPath(newPath);
+      }
+    }
+  }, [folders, path]);
+
+  // NEW: Diagnostic Mount Log
+  useEffect(() => {
+    console.log("📡 [Workspace] Component Mounted/Rendered. Path depth:", path.length);
+  }, []);
 
   const currentView = useMemo(() => {
     return {
@@ -65,9 +84,6 @@ export default function Workspace() {
     }
   };
 
-  if (loading) {
-    return <div className="p-8 text-gray-500 flex items-center justify-center h-full">Loading workspace data...</div>;
-  }
 
   return (
     <div 
@@ -81,6 +97,13 @@ export default function Workspace() {
       onDrop={(e) => handleDrop(e, currentFolderId)}
       onDragLeave={() => setDragOverTarget(undefined)} // <-- CHANGE THIS LINE
     >
+
+      {/* NEW: Added a non-destructive loading overlay or progress bar */}
+      {loading && (
+        <div className="absolute top-0 left-0 w-full h-1 bg-primary/30 overflow-hidden z-20">
+          <div className="w-full h-full bg-primary animate-[loading_1.5s_infinite_linear] origin-left"></div>
+        </div>
+      )}
       
       {/* BREADCRUMBS */}
       <div className="directory_bar flex items-center gap-2 mb-6 px-4 py-3 bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm font-medium overflow-x-auto whitespace-nowrap">

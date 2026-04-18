@@ -4,15 +4,18 @@
 Agent Explorer API
 
 ## Current Build
-v1.1.0 - Folder Handlers & Database Safety
+v1.3.0 - Multi-Tag Category Support
 
 ## Last Updated
-2026-04-11
+2026-04-18
 
 ## What Was Requested
-Debug and finalize the backend folder handlers to support root-level folder creation and correct JSON array formatting for front-end consumption.
+Implement multi-tag category support (using JSONB arrays for Categories and Sub-categories), resolving the limitation of single-tag storage and enabling granular filtering in the frontend.
 
 ## Build History
+- **v1.3.0 - Multi-Tag Category Support:** Migrated `category` and `sub_category` to `JSONB` arrays (`categories`, `sub_categories`) in the database. Updated `Agent` model and all handlers to support slice-based tagging, enabling granular filtering in the frontend.
+- **v1.2.1 - Partial Update Fix:** Resolved a critical regression where partial updates (e.g., renaming) would reset `parent_id` and `level` to zero values. The server now fetches existing records before decoding JSON, ensuring only provided fields are updated.
+- **v1.2.0 - API Hardening & Route Fixes:** Corrected `routes.go` placeholders. Enhanced `UpdateFolder`, `UpdateAgent`, and `MoveAgent` to return the full updated object using PostgreSQL `RETURNING` clauses. This resolves potential frontend synchronization issues and aligns with standard REST patterns.
 - **v1.1.0 - Folder Handlers & Database Safety:** Refactored `CreateFolder` to handle Go's zero values and safely dereference the `ParentID` pointer, allowing the creation of root folders by passing valid `NULL` values to PostgreSQL. Corrected the `GetFolders` loop logic to append rows into a single slice and encode the payload exactly once, returning a properly formatted JSON array to the front-end.
 - **v1.0.0 - CORS Implementation & API Finalization:** Created custom `CORS` middleware in `internal/middleware/cors.go` to inject required `Access-Control` headers and intercept HTTP `OPTIONS` preflight requests. Wrapped the standard library `ServeMux` with the middleware in `main.go`. The API is now fully prepared for frontend integration.
 - **v0.11.0 - Agent to Folder Linking:** Updated `CreateAgent` and `GetAgents` to parse and return `FolderID`. Corrected parameter/placeholder mismatches in `UpdateAgent` and scan errors in `CreateAgent`. Implemented `MoveAgent` handler (`PUT /api/agents/{id}/move`) specifically for handling partial payload updates necessary for drag-and-drop interactions.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"net/http"
 
 	"agent-explorer/internal/database"
@@ -110,34 +111,76 @@ func UpdateFolder(w http.ResponseWriter, r *http.Request){
 
 	var folder models.Folder
 
-	err := json.NewDecoder(r.Body).Decode(&folder)
+	// 1. Fetch current values into the struct first to support partial updates
+	fetchQuery := `SELECT id, name, level, parent_id, created_at, updated_at FROM folders WHERE id = $1`
+	err := database.DB.QueryRow(context.Background(), fetchQuery, id).Scan(
+		&folder.ID,
+		&folder.Name,
+		&folder.Level,
+		&folder.ParentID,
+		&folder.CreatedAt,
+		&folder.UpdatedAt,
+	)
+
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			http.Error(w, "Folder not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("Database fetch error: %v\n", err)
+		http.Error(w, "Failed to retrieve folder data", http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Decode the incoming JSON OVER the existing data (merges the fields)
+	err = json.NewDecoder(r.Body).Decode(&folder)
+    defer r.Body.Close()
 
 	if err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
+    // Validate that the folder name is not empty or whitespace only
+    if strings.TrimSpace(folder.Name) == "" {
+        http.Error(w, "Folder name cannot be empty", http.StatusBadRequest)
+        return
+    }
+
+    // Handle parent_id empty string to nil conversion for root-level folders
+    if folder.ParentID != nil && *folder.ParentID == "" {
+        folder.ParentID = nil
+    }
+
 	query := `
 		UPDATE folders
-		SET name = $1, updated_at = NOW()
-		WHERE id = $2
+		SET name = $1, parent_id = $2, level = $3, updated_at = NOW()
+		WHERE id = $4
+		RETURNING id, name, level, parent_id, created_at, updated_at
 	`
 
-	tag, err := database.DB.Exec(context.Background(), query,  folder.Name, id)
+	log.Printf("Updating folder %s: name=%s, parent_id=%v, level=%d", id, folder.Name, folder.ParentID, folder.Level)
+    err = database.DB.QueryRow(context.Background(), query, folder.Name, folder.ParentID, folder.Level, id).Scan(
+		&folder.ID,
+		&folder.Name,
+		&folder.Level,
+		&folder.ParentID,
+		&folder.CreatedAt,
+		&folder.UpdatedAt,
+	)
 
 	if err != nil {
+		if err.Error() == "no rows in result set" {
+			http.Error(w, "Folder not found", http.StatusNotFound)
+			return
+		}
 		log.Printf("Database update error: %v\n", err)
 		http.Error(w, "Failed to update folder", http.StatusInternalServerError)
 		return
 	}
 
-	if tag.RowsAffected() == 0{
-		http.Error(w, "Folder not found", http.StatusNotFound)
-		return
-	}
-
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Folder updated successfully"})
+	json.NewEncoder(w).Encode(folder)
 }
 
 func DeleteFolder(w http.ResponseWriter, r *http.Request){

@@ -50,14 +50,18 @@ export default function AgentModal({ agent, onClose }: AgentModalProps) {
               <h2 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
                 {agent.name}
               </h2>
-              <div className="flex items-center gap-2 mt-1.5">
-                <span className="px-2.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-md border border-gray-200 dark:border-gray-700">
-                  {agent.category}
-                </span>
-                <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
-                <span className="px-2.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-md border border-gray-200 dark:border-gray-700">
-                  {agent.sub_category}
-                </span>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {agent.categories?.map((cat, i) => (
+                  <span key={i} className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary rounded border border-primary/20">
+                    {cat}
+                  </span>
+                ))}
+                {agent.sub_categories?.length > 0 && <span className="text-gray-300 dark:text-gray-600 text-xs mx-1">|</span>}
+                {agent.sub_categories?.map((sub, i) => (
+                  <span key={i} className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700">
+                    {sub}
+                  </span>
+                ))}
               </div>
             </div>
           </div>

@@ -12,37 +12,87 @@ interface AgentFormModalProps {
 
 export default function AgentFormModal({ isOpen, onClose, onSave, initialData, activeFolderId, agents }: AgentFormModalProps) {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('');
-  const [subCategory, setSubCategory] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoryInput, setCategoryInput] = useState('');
+  const [subCategories, setSubCategories] = useState<Record<string, string[]>>({});
+  const [subCategoryInput, setSubCategoryInput] = useState('');
+  const [selectedCategoryForSub, setSelectedCategoryForSub] = useState<string | null>(null);
+  
   const [subPrompts, setSubPrompts] = useState<SubPrompt[]>([{ sub_prompt_name: '', sub_prompt_content: '' }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Derive unique lists for the searchable dropdowns
-  const uniqueCategories = Array.from(new Set(agents.map(a => a.category).filter(Boolean)));
-  const uniqueSubCategories = Array.from(
-    new Set(
-      agents
-        .filter(a => a.category.toLowerCase() === category.toLowerCase())
-        .map(a => a.sub_category)
-        .filter(Boolean)
-    )
-  );
 
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
         setName(initialData.name);
-        setCategory(initialData.category || '');
-        setSubCategory(initialData.sub_category || '');
+        
+        // Parsing logic for existing agents (assuming comma-separated for now)
+        const cats = initialData.categories || [];
+        const subs = initialData.sub_categories || [];
+        
+        setCategories(cats);
+        // Map sub-categories to the first category as a fallback for the UI state
+        if (cats.length > 0) {
+          setSubCategories({ [cats[0]]: subs });
+          setSelectedCategoryForSub(cats[0]);
+        }
+        
         setSubPrompts(initialData.sub_prompts?.length ? initialData.sub_prompts : [{ sub_prompt_name: '', sub_prompt_content: '' }]);
       } else {
         setName('');
-        setCategory('');
-        setSubCategory('');
+        setCategories([]);
+        setCategoryInput('');
+        setSubCategories({});
+        setSubCategoryInput('');
+        setSelectedCategoryForSub(null);
         setSubPrompts([{ sub_prompt_name: '', sub_prompt_content: '' }]);
       }
     }
   }, [isOpen, initialData]);
+
+  const handleAddCategory = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && categoryInput.trim()) {
+      e.preventDefault();
+      const newCat = categoryInput.trim();
+      if (!categories.includes(newCat)) {
+        setCategories([...categories, newCat]);
+        if (!selectedCategoryForSub) setSelectedCategoryForSub(newCat);
+      }
+      setCategoryInput('');
+    }
+  };
+
+  const handleAddSubCategory = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && subCategoryInput.trim() && selectedCategoryForSub) {
+      e.preventDefault();
+      const newSub = subCategoryInput.trim();
+      const currentSubs = subCategories[selectedCategoryForSub] || [];
+      if (!currentSubs.includes(newSub)) {
+        setSubCategories({
+          ...subCategories,
+          [selectedCategoryForSub]: [...currentSubs, newSub]
+        });
+      }
+      setSubCategoryInput('');
+    }
+  };
+
+  const removeCategory = (cat: string) => {
+    setCategories(categories.filter(c => c !== cat));
+    const newSubs = { ...subCategories };
+    delete newSubs[cat];
+    setSubCategories(newSubs);
+    if (selectedCategoryForSub === cat) {
+      setSelectedCategoryForSub(categories.find(c => c !== cat) || null);
+    }
+  };
+
+  const removeSubCategory = (cat: string, sub: string) => {
+    setSubCategories({
+      ...subCategories,
+      [cat]: subCategories[cat].filter(s => s !== sub)
+    });
+  };
 
   const handleAddPrompt = () => setSubPrompts([...subPrompts, { sub_prompt_name: '', sub_prompt_content: '' }]);
   const handleRemovePrompt = (index: number) => setSubPrompts(subPrompts.filter((_, i) => i !== index));
@@ -52,26 +102,52 @@ export default function AgentFormModal({ isOpen, onClose, onSave, initialData, a
     setSubPrompts(newPrompts);
   };
 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+
+    // Duplicate name validation
+    const isDuplicate = agents.some(
+      (a) => a.name.toLowerCase() === name.toLowerCase() && a.folder_id === activeFolderId && a.id !== initialData?.id
+    );
+
+    if (isDuplicate) {
+      setErrorMsg(`An agent named "${name}" already exists in this folder.`);
+      return;
+    }
+
     setIsSubmitting(true);
     
-    await onSave({
-      name,
-      category: category.trim() || 'Uncategorized',
-      sub_category: subCategory.trim() || 'General',
-      folder_id: activeFolderId,
-      sub_prompts: subPrompts
-    });
-    
-    setIsSubmitting(false);
-    onClose();
+    try {
+      const finalSubCategories = Object.values(subCategories).flat();
+
+      await onSave({
+        name,
+        categories: categories.length > 0 ? categories : ['Uncategorized'],
+        sub_categories: finalSubCategories.length > 0 ? finalSubCategories : ['General'],
+        folder_id: activeFolderId,
+        sub_prompts: subPrompts
+      });
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to save agent. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
 
+  const handleBackdropMouseDown = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="modal_overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+    <div className="modal_overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onMouseDown={handleBackdropMouseDown}>
       <div className="modal_container w-full max-w-2xl bg-white dark:bg-gray-900 rounded-xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
         
         <div className="modal_header p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
@@ -84,49 +160,84 @@ export default function AgentFormModal({ isOpen, onClose, onSave, initialData, a
         </div>
 
         <div className="modal_body p-6 overflow-y-auto custom-scrollbar flex-1">
+          {errorMsg && (
+            <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-lg flex items-center gap-2 text-red-600 dark:text-red-400 text-sm animate-in fade-in slide-in-from-top-1">
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {errorMsg}
+            </div>
+          )}
           <form id="agent-form" onSubmit={handleSubmit} className="agent_form space-y-6">
             
-            <div className="form_grid grid grid-cols-1 gap-4">
-              <div className="input_group space-y-1">
-                <label className="input_label text-sm font-medium text-gray-700 dark:text-gray-300">Agent Name</label>
-                <input required type="text" value={name} onChange={e => setName(e.target.value)} className="text_input w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary" placeholder="e.g. Code Reviewer" />
+            <div className="form_grid space-y-4">
+              <div className="input_group space-y-2">
+                <label className="input_label text-sm font-medium text-gray-700 dark:text-gray-300 flex justify-between">
+                  <span>Agent Name</span>
+                  <span className="text-xs text-gray-400 font-normal">Required</span>
+                </label>
+                <input required type="text" value={name} onChange={e => setName(e.target.value)} className="text_input w-full p-2.5 border border-gray-300 dark:border-gray-700 rounded-xl bg-transparent text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary shadow-sm" placeholder="e.g. Code Reviewer" />
               </div>
 
-              <div className="category_grid grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="input_group space-y-1">
-                  <label className="input_label text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+              {/* MULTI-TAG CATEGORIES */}
+              <div className="categories_section space-y-3">
+                <label className="input_label text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Categories <span className="text-xs text-gray-400 font-normal">(Press Enter to add)</span>
+                </label>
+                <div className="tag_container flex flex-wrap gap-2 min-h-[42px] p-2 border border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-800/30">
+                  {categories.map(cat => (
+                    <span 
+                      key={cat} 
+                      onClick={() => setSelectedCategoryForSub(cat)}
+                      className={`tag inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium cursor-pointer transition-all border-2 ${
+                        selectedCategoryForSub === cat 
+                        ? 'bg-primary/10 text-primary border-primary/40' 
+                        : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                      }`}
+                    >
+                      {cat}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); removeCategory(cat); }} className="hover:text-red-500">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </span>
+                  ))}
                   <input 
-                    list="category-options" 
-                    value={category} 
-                    onChange={e => {
-                      setCategory(e.target.value);
-                      if (e.target.value === '') setSubCategory(''); // Reset sub on clear
-                    }} 
-                    className="text_input w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary" 
-                    placeholder="Search or type new..." 
+                    type="text" 
+                    value={categoryInput} 
+                    onChange={e => setCategoryInput(e.target.value)}
+                    onKeyDown={handleAddCategory}
+                    className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                    placeholder={categories.length === 0 ? "e.g. Design, Coding..." : "Add more..."}
                   />
-                  <datalist id="category-options">
-                    {uniqueCategories.map((cat, idx) => (
-                      <option key={idx} value={cat} />
-                    ))}
-                  </datalist>
                 </div>
+              </div>
 
-                <div className="input_group space-y-1">
-                  <label className="input_label text-sm font-medium text-gray-700 dark:text-gray-300">Sub-Category</label>
+              {/* NESTED SUB-CATEGORIES */}
+              <div className={`sub_categories_section space-y-3 transition-opacity duration-300 ${!selectedCategoryForSub ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                <label className="input_label text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Sub-Categories for <span className="text-primary font-bold">{selectedCategoryForSub || '...'}</span>
+                </label>
+                <div className="tag_container flex flex-wrap gap-2 min-h-[42px] p-2 border border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-800/30">
+                  {selectedCategoryForSub && (subCategories[selectedCategoryForSub] || []).map(sub => (
+                    <span 
+                      key={sub} 
+                      className="tag inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100 border border-transparent transition-all"
+                    >
+                      {sub}
+                      <button type="button" onClick={() => removeSubCategory(selectedCategoryForSub, sub)} className="hover:text-red-500">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </span>
+                  ))}
                   <input 
-                    list="subcategory-options" 
-                    value={subCategory} 
-                    onChange={e => setSubCategory(e.target.value)} 
-                    disabled={!category}
-                    className="text_input w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed" 
-                    placeholder={category ? "Search or type new..." : "Select category first"} 
+                    type="text" 
+                    disabled={!selectedCategoryForSub}
+                    value={subCategoryInput} 
+                    onChange={e => setSubCategoryInput(e.target.value)}
+                    onKeyDown={handleAddSubCategory}
+                    className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 disabled:cursor-not-allowed"
+                    placeholder={selectedCategoryForSub ? `Add sub-category to ${selectedCategoryForSub}...` : "Select a category tag first"}
                   />
-                  <datalist id="subcategory-options">
-                    {uniqueSubCategories.map((subCat, idx) => (
-                      <option key={idx} value={subCat} />
-                    ))}
-                  </datalist>
                 </div>
               </div>
             </div>

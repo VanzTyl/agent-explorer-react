@@ -3,18 +3,27 @@
 ## Project Name
 Agent-Explorer
 ## Current Build
-v0.13.8 - Sidebar Integration & Validation
+v0.14.9 - Zero Alert Architecture Complete
 ## Last Updated
-Prevented duplicate folder creation and upgraded FileTree to support explicit folders and drag-and-drop.
+2026-04-18
 ## What Was Requested
-1. Prevent duplication of folder names in the same directory.
-2. Upgrade `FileTree.tsx` to render explicit database folders instead of categories.
-3. Enable dragging and dropping items from the Workspace directly into the FileTree sidebar.
+Complete the transition to v0.14.9, finalize the "Zero Alert Architecture," and verify alignment with the Go backend JSONB schema migration.
 ## Changes Made
-- Added duplicate name validation in `FolderFormModal.tsx` before API submission.
-- Updated `RootLayout.tsx` to pass the `folders` and `onMoveItem` props to `<FileTree />`.
-- Completely rewrote `FileTree.tsx` with recursive rendering to support infinite nesting depth, matching the drag-and-drop logic of the main Workspace perfectly.
+- Audited codebase for v0.14.9 stability; confirmed Modal-only feedback loop.
+- Verified `useAgents.ts` optimization (v0.14.7 local state updates).
+- FIXED Category Schema mismatch: Frontend now uses pluralized string arrays (`categories`, `sub_categories`) matching the Go backend JSONB slices.
+- Verified DnD stability in `FileTree.tsx` and `Workspace.tsx`.
 ## Build History
+- v0.14.9: Finalized modal-only feedback architecture; removed all native alert/confirm calls.
+- v0.14.8: Integrated ConfirmationModal for deletions and inline error reporting in form modals.
+- v0.14.7: Optimized hooks to use API-returned objects, eliminating refetch flickers and loading states.
+- v0.14.6: Implemented automatic breadcrumb name synchronization in Workspace.tsx.
+- v0.14.5: Applied full UI stability fixes (removed destructive loading returns).
+- v0.14.4: Hardened modal backdrop closure using onMouseDown for selection-drag protection.
+- v0.14.3: Refactored Workspace to use non-destructive loading progress bars.
+- v0.14.2: Enabled cross-directory agent movement via RootLayout orchestration.
+- v0.14.1: Fixed persistent move logic by enriching payloads with name and level data.
+- v0.14.0: Hardened API alignment for all PUT/DELETE endpoints with {id} parameters.
 - v0.13.8: Added name validation, integrated FileTree with explicit folders and DnD.
 - v0.13.7: Fixed permanent active state on root workspace breadcrumb and resolved drag event flickering.
 - v0.13.6: Fixed breadcrumb UI so drag-hover states are accurate and non-permanent.

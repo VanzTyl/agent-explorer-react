@@ -6,9 +6,9 @@ export interface SubPrompt {
 export interface Agent {
   id: string;
   name: string;
-  category: string;
-  sub_category: string;
-  folder_id: string | null; // <-- Added from new API
+  categories: string[];
+  sub_categories: string[];
+  folder_id: string | null;
   sub_prompts: SubPrompt[];
 }
 

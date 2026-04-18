@@ -22,6 +22,8 @@ func CreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	categoriesJSON, _ := json.Marshal(agent.Categories)
+	subCategoriesJSON, _ := json.Marshal(agent.SubCategories)
 	subPromptsJSON, err := json.Marshal(agent.Subprompts)
 
 	if err != nil {
@@ -30,7 +32,7 @@ func CreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	// Added folder id
 	query := `
-		INSERT INTO agents (name, sub_prompts, category, sub_category, folder_id)
+		INSERT INTO agents (name, sub_prompts, categories, sub_categories, folder_id)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at, updated_at
 	`
@@ -42,8 +44,8 @@ func CreateAgent(w http.ResponseWriter, r *http.Request) {
 		query,
 		agent.Name,
 		subPromptsJSON,
-		agent.Category,
-		agent.SubCategory,
+		categoriesJSON,
+		subCategoriesJSON,
 		agent.FolderID, // Finds for folder id now
 	).Scan(
 		&agent.ID,
@@ -67,7 +69,7 @@ func GetAgents(w http.ResponseWriter, r *http.Request){
 
 	// Added folder id
 	query :=  `
-		SELECT id, name, sub_prompts, category, sub_category, folder_id, created_at, updated_at
+		SELECT id, name, sub_prompts, categories, sub_categories, folder_id, created_at, updated_at
 		FROM agents
 		ORDER by created_at DESC
 	`
@@ -85,14 +87,14 @@ func GetAgents(w http.ResponseWriter, r *http.Request){
 
 	for rows.Next() {
 		var agent models.Agent
-		var subPromptBytes []byte
+		var subPromptBytes, categoriesBytes, subCategoriesBytes []byte
 
 		err := rows.Scan(
 			&agent.ID,
 			&agent.Name,
 			&subPromptBytes,
-			&agent.Category,
-			&agent.SubCategory,
+			&categoriesBytes,
+			&subCategoriesBytes,
 			&agent.FolderID, // Returns folder id now
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
@@ -103,10 +105,9 @@ func GetAgents(w http.ResponseWriter, r *http.Request){
 			continue
 		}
 
-		err = json.Unmarshal(subPromptBytes, &agent.Subprompts)
-		if err != nil {
-			log.Printf("JSON Unmarshal Error for Agent ID %s: %v\n", agent.ID, err)
-		}
+		json.Unmarshal(subPromptBytes, &agent.Subprompts)
+		json.Unmarshal(categoriesBytes, &agent.Categories)
+		json.Unmarshal(subCategoriesBytes, &agent.SubCategories)
 		
 		agents = append(agents, agent)
 	}
@@ -123,38 +124,80 @@ func UpdateAgent(w http.ResponseWriter, r *http.Request){
 	id := r.PathValue("id")
 
 	var agent models.Agent
+
+	// 1. Fetch current values into the struct first to support partial updates
+	fetchQuery := `SELECT id, name, categories, sub_categories, folder_id, created_at, updated_at, sub_prompts FROM agents WHERE id = $1`
+	var subPromptBytes, categoriesBytes, subCategoriesBytes []byte
+	err := database.DB.QueryRow(context.Background(), fetchQuery, id).Scan(
+		&agent.ID,
+		&agent.Name,
+		&categoriesBytes,
+		&subCategoriesBytes,
+		&agent.FolderID,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+		&subPromptBytes,
+	)
+
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			http.Error(w, "Agent not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("Database fetch error: %v\n", err)
+		http.Error(w, "Failed to retrieve agent data", http.StatusInternalServerError)
+		return
+	}
+
+	// Unmarshal existing states
+	json.Unmarshal(subPromptBytes, &agent.Subprompts)
+	json.Unmarshal(categoriesBytes, &agent.Categories)
+	json.Unmarshal(subCategoriesBytes, &agent.SubCategories)
+
+	// 2. Decode the incoming JSON OVER the existing data (merges the fields)
 	if err := json.NewDecoder(r.Body).Decode(&agent); err != nil{
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
-	subPromptsJSON, err := json.Marshal(agent.Subprompts)
-	if err != nil{
-		http.Error(w, "Failed to process sub-prompts", http.StatusInternalServerError)
-		return
-	}
+	subPromptsJSON, _ := json.Marshal(agent.Subprompts)
+	categoriesJSON, _ := json.Marshal(agent.Categories)
+	subCategoriesJSON, _ := json.Marshal(agent.SubCategories)
 
 	query := `
 		UPDATE agents
-		SET name = $1, sub_prompts = $2, category = $3, sub_category = $4
+		SET name = $1, sub_prompts = $2, categories = $3, sub_categories = $4, updated_at = NOW()
 		WHERE id = $5
+		RETURNING id, name, sub_prompts, categories, sub_categories, folder_id, created_at, updated_at
 	`
 
-	result, err := database.DB.Exec(context.Background(), query, agent.Name, subPromptsJSON, agent.Category, agent.SubCategory, id)
+	err = database.DB.QueryRow(context.Background(), query, agent.Name, subPromptsJSON, categoriesJSON, subCategoriesJSON, id).Scan(
+		&agent.ID,
+		&agent.Name,
+		&subPromptBytes,
+		&categoriesBytes,
+		&subCategoriesBytes,
+		&agent.FolderID,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
 
 	if err != nil{
+		if err.Error() == "no rows in result set" {
+			http.Error(w, "Agent not found", http.StatusNotFound)
+			return
+		}
 		log.Printf("Database Update Error: %v\n", err)
 		http.Error(w, "Failed to update agent", http.StatusInternalServerError)
 		return
 	}
 
-	if result.RowsAffected() == 0 {
-		http.Error(w, "Agent not found", http.StatusNotFound)
-		return
-	}
+	json.Unmarshal(subPromptBytes, &agent.Subprompts)
+	json.Unmarshal(categoriesBytes, &agent.Categories)
+	json.Unmarshal(subCategoriesBytes, &agent.SubCategories)
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Agent updated successfully"})
+	json.NewEncoder(w).Encode(agent)
 }
 
 func DeleteAgent(w http.ResponseWriter, r *http.Request){
@@ -195,21 +238,36 @@ func MoveAgent(w http.ResponseWriter, r *http.Request){
 		UPDATE agents
 		SET folder_id = $1, updated_at = NOW()
 		WHERE id = $2
+		RETURNING id, name, sub_prompts, categories, sub_categories, folder_id, created_at, updated_at
 	`
 
-	result, err := database.DB.Exec(context.Background(), query, payload.FolderID, id)
+	var agent models.Agent
+	var subPromptBytes, categoriesBytes, subCategoriesBytes []byte
+	err := database.DB.QueryRow(context.Background(), query, payload.FolderID, id).Scan(
+		&agent.ID,
+		&agent.Name,
+		&subPromptBytes,
+		&categoriesBytes,
+		&subCategoriesBytes,
+		&agent.FolderID,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
 
 	if err != nil{
+		if err.Error() == "no rows in result set" {
+			http.Error(w, "Agent not found", http.StatusNotFound)
+			return
+		}
 		log.Printf("Database move error: %v\n", err)
 		http.Error(w, "Failed to move agent", http.StatusInternalServerError)
 		return
 	}
-	
-	if result.RowsAffected() == 0{
-		http.Error(w, "Agent not found", http.StatusNotFound)
-		return
-	}
 
+	json.Unmarshal(subPromptBytes, &agent.Subprompts)
+	json.Unmarshal(categoriesBytes, &agent.Categories)
+	json.Unmarshal(subCategoriesBytes, &agent.SubCategories)
+	
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Agent moved successfully"})
+	json.NewEncoder(w).Encode(agent)
 }

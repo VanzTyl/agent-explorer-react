@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { type Folder } from '../types/agent.ts';
 
+const API_BASE_URL = 'http://localhost:8080/api/folders';
+
 export function useFolders() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -8,10 +10,9 @@ export function useFolders() {
   const fetchFolders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/api/folders');
+      const res = await fetch(API_BASE_URL);
       
       if (!res.ok) {
-        // This will capture if the server sends back a 404, 500, etc.
         const errorText = await res.text();
         throw new Error(`Server returned ${res.status}: ${errorText}`);
       }
@@ -20,10 +21,7 @@ export function useFolders() {
       setFolders(data || []);
       
     } catch (error) {
-      // 👇 THIS WILL REVEAL THE EXACT PROBLEM IN YOUR CONSOLE 👇
-      console.error("🔥 ACTUAL FETCH ERROR:", error);
-      console.warn("API Error, using local fallback for Folders.");
-      
+      console.error("🔥 FOLDERS FETCH ERROR:", error);
       // Dummy data fallback for development
       setFolders([
         { id: 'folder-1', name: 'Productivity', level: 0, parent_id: null },
@@ -40,7 +38,7 @@ export function useFolders() {
 
   const createFolder = async (folderData: Partial<Folder>) => {
     try {
-      const res = await fetch('http://localhost:8080/api/folders', {
+      const res = await fetch(API_BASE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(folderData)
@@ -53,24 +51,41 @@ export function useFolders() {
     }
   };
 
-  const updateFolder = async (id: string, name: string) => {
+  /**
+   * Updated to support polymorphic updates (name, parent_id, level)
+   * to align with the move functionality.
+   */
+  const updateFolder = async (id: string, folderData: Partial<Folder>) => {
+    const targetUrl = `${API_BASE_URL}/${id}`;
+    console.log(`📡 [useFolders] Updating Folder at: ${targetUrl}`, folderData);
+
     try {
-      const res = await fetch(`http://localhost:8080/api/folders/${id}`, {
+      const res = await fetch(targetUrl, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify(folderData)
       });
-      if (!res.ok) throw new Error('Failed to update folder');
-      await fetchFolders();
+      
+      if (!res.ok) {
+        const errorMsg = await res.text();
+        throw new Error(`Update failed: ${res.status} - ${errorMsg}`);
+      }
+      
+      // OPTIMIZATION: Use the updated object returned by the API to avoid a full refetch/flicker
+      const updatedFolder: Folder = await res.json();
+      setFolders(prev => prev.map(f => f.id === id ? updatedFolder : f));
     } catch (err) {
       console.warn("API Error, using local fallback for Update Folder.");
-      setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
+      setFolders(prev => prev.map(f => f.id === id ? { ...f, ...folderData } : f));
     }
   };
 
   const deleteFolder = async (id: string) => {
+    const targetUrl = `${API_BASE_URL}/${id}`;
+    console.log(`📡 [useFolders] Deleting Folder at: ${targetUrl}`);
+
     try {
-      const res = await fetch(`http://localhost:8080/api/folders/${id}`, { method: 'DELETE' });
+      const res = await fetch(targetUrl, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete folder');
       await fetchFolders();
     } catch (err) {
@@ -80,18 +95,25 @@ export function useFolders() {
   };
 
   const moveFolder = async (id: string, parentId: string | null) => {
-    try {
-      const res = await fetch(`http://localhost:8080/api/folders/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parent_id: parentId })
-      });
-      if (!res.ok) throw new Error('Failed to move folder');
-      await fetchFolders();
-    } catch (err) {
-      console.warn("API Error, using local fallback for Move Folder.");
-      setFolders(prev => prev.map(f => f.id === id ? { ...f, parent_id: parentId } : f));
+    // 1. Find the current folder to get its name
+    const currentFolder = folders.find(f => f.id === id);
+    if (!currentFolder) return;
+    // 2. Calculate the new level
+    let newLevel = 1; // Default for Root
+    if (parentId) {
+      const parentFolder = folders.find(f => f.id === parentId);
+      if (parentFolder) {
+        newLevel = parentFolder.level + 1;
+      }
     }
+    // 3. Send the full payload required by the backend validation
+    const movePayload = {
+      name: currentFolder.name,
+      parent_id: parentId,
+      level: newLevel
+    };
+    console.log(`📡 [useFolders] Moving Folder ${id} to parent ${parentId} at level ${newLevel}`);
+    await updateFolder(id, movePayload);
   };
 
   return { 

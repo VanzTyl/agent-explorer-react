@@ -15,14 +15,14 @@ func SetupRoutes() *http.ServeMux{
 
 	mux.HandleFunc("POST /api/agents", handlers.CreateAgent)
 	mux.HandleFunc("GET /api/agents", handlers.GetAgents)
-	mux.HandleFunc("PUT /api/agents", handlers.UpdateAgent)
-	mux.HandleFunc("DELETE /api/agents", handlers.DeleteAgent)
+	mux.HandleFunc("PUT /api/agents/{id}", handlers.UpdateAgent)
+	mux.HandleFunc("DELETE /api/agents/{id}", handlers.DeleteAgent)
 	mux.HandleFunc("PUT /api/agents/{id}/move", handlers.MoveAgent)
 
 	mux.HandleFunc("POST /api/folders", handlers.CreateFolder)
 	mux.HandleFunc("GET /api/folders", handlers.GetFolders)
-	mux.HandleFunc("PUT /api/folders", handlers.UpdateFolder)
-	mux.HandleFunc("DELETE /api/folders", handlers.DeleteFolder)
+	mux.HandleFunc("PUT /api/folders/{id}", handlers.UpdateFolder)
+	mux.HandleFunc("DELETE /api/folders/{id}", handlers.DeleteFolder)
 
 	return mux
 }

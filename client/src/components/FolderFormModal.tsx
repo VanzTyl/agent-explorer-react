@@ -13,10 +13,12 @@ interface FolderFormModalProps {
 export default function FolderFormModal({ isOpen, onClose, onSave, parentId, initialData, folders = [] }: FolderFormModalProps) {
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setName(initialData ? initialData.name : '');
+      setError(null);
     }
   }, [isOpen, initialData]);
 
@@ -36,10 +38,11 @@ export default function FolderFormModal({ isOpen, onClose, onSave, parentId, ini
     );
 
     if (isDuplicate) {
-      alert("A folder with this name already exists in this location.");
+      setError("A folder with this name already exists in this location.");
       return; // Stop the submission!
     }
     
+    setError(null);
     setIsSubmitting(true);
     
     if (initialData) {
@@ -74,8 +77,14 @@ export default function FolderFormModal({ isOpen, onClose, onSave, parentId, ini
 
   if (!isOpen) return null;
 
+  const handleBackdropMouseDown = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="modal_overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+    <div className="modal_overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onMouseDown={handleBackdropMouseDown}>
       <div className="modal_container w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         
         <div className="modal_header p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
@@ -88,6 +97,14 @@ export default function FolderFormModal({ isOpen, onClose, onSave, parentId, ini
         </div>
 
         <div className="modal_body p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-lg flex items-center gap-2 text-red-600 dark:text-red-400 text-sm animate-in fade-in slide-in-from-top-1">
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {error}
+            </div>
+          )}
           <form id="folder-form" onSubmit={handleSubmit}>
             <div className="input_group space-y-1">
               <label className="input_label text-sm font-medium text-gray-700 dark:text-gray-300">Folder Name</label>
