@@ -13,6 +13,7 @@ v1.3.0 - Multi-Tag Category Support
 Implement multi-tag category support (using JSONB arrays for Categories and Sub-categories), resolving the limitation of single-tag storage and enabling granular filtering in the frontend.
 
 ## Build History
+- **v1.4.0 - Deployment Readiness:** Hardened CORS middleware to use `ALLOWED_ORIGIN` environment variable (falling back to `localhost:5173`). Ensured `PORT` environment variable is correctly used for Render/Cloud deployment. Updated client hooks to use `VITE_API_BASE_URL`.
 - **v1.3.0 - Multi-Tag Category Support:** Migrated `category` and `sub_category` to `JSONB` arrays (`categories`, `sub_categories`) in the database. Updated `Agent` model and all handlers to support slice-based tagging, enabling granular filtering in the frontend.
 - **v1.2.1 - Partial Update Fix:** Resolved a critical regression where partial updates (e.g., renaming) would reset `parent_id` and `level` to zero values. The server now fetches existing records before decoding JSON, ensuring only provided fields are updated.
 - **v1.2.0 - API Hardening & Route Fixes:** Corrected `routes.go` placeholders. Enhanced `UpdateFolder`, `UpdateAgent`, and `MoveAgent` to return the full updated object using PostgreSQL `RETURNING` clauses. This resolves potential frontend synchronization issues and aligns with standard REST patterns.

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { type Folder } from '../types/agent.ts';
 
-const API_BASE_URL = 'http://localhost:8080/api/folders';
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'}/folders`;
 
 export function useFolders() {
   const [folders, setFolders] = useState<Folder[]>([]);

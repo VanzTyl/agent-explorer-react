@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { type Agent } from '../types/agent';
 
-const API_BASE_URL = 'http://localhost:8080/api/agents';
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'}/agents`;
 
 export function useAgents() {
   const [agents, setAgents] = useState<Agent[]>([]);

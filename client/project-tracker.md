@@ -11,7 +11,8 @@ Complete the transition to v0.14.9, finalize the "Zero Alert Architecture," and 
 ## Changes Made
 - Audited codebase for v0.14.9 stability; confirmed Modal-only feedback loop.
 - Verified `useAgents.ts` optimization (v0.14.7 local state updates).
-- FIXED Category Schema mismatch: Frontend now uses pluralized string arrays (`categories`, `sub_categories`) matching the Go backend JSONB slices.
+- FIXED Category Schema mismatch: Frontend now uses pluralized string arrays (`categories`, `sub_categories`).
+- Implemented `VITE_API_BASE_URL` environment variables in `.env` and hooks with localhost fallback.
 - Verified DnD stability in `FileTree.tsx` and `Workspace.tsx`.
 ## Build History
 - v0.14.9: Finalized modal-only feedback architecture; removed all native alert/confirm calls.
